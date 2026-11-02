@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sistema</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%233987e5'/%3E%3Cpath d='M2 11h3l2-6 2 8 2-5h3' fill='none' stroke='white' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --border: rgba(11,11,11,.10);
+    --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7;
+    --s1: #2a78d6; --s2: #eb6834;
+    --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --border: rgba(255,255,255,.10);
+      --ink: #f0efec; --ink2: #c3c2b7; --grid: #2c2c2a; --axis: #383835;
+      --s1: #3987e5; --s2: #d95926;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --border: rgba(255,255,255,.10);
+    --ink: #f0efec; --ink2: #c3c2b7; --grid: #2c2c2a; --axis: #383835;
+    --s1: #3987e5; --s2: #d95926;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+         font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+
+  header { display: flex; align-items: center; gap: 14px; padding: 14px 20px; max-width: 1600px; margin: 0 auto; }
+  header strong { font-size: 15px; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+  .status.off::before { background: var(--crit); }
+  .meta { color: var(--ink2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spacer { flex: 1; }
+  .btn { background: none; border: 1px solid var(--border); color: var(--ink2); border-radius: 6px;
+         width: 30px; height: 28px; cursor: pointer; font-size: 14px; }
+  .btn:hover { color: var(--ink); }
+
+  main { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px;
+         padding: 0 20px 20px; max-width: 1600px; margin: 0 auto; transition: opacity .3s; }
+  body.off main { opacity: .45; }
+  .card { grid-column: span 3; background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+          padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .card.wide { grid-column: span 4; }
+  @media (max-width: 1150px) { .card, .card.wide { grid-column: span 6; } }
+  @media (max-width: 680px) { header, main { padding-left: 16px; padding-right: 16px; }
+                              .card, .card.wide { grid-column: span 12; } header .meta#meta { display: none; } }
+
+  .head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .label { font-size: 13px; font-weight: 600; color: var(--ink2); white-space: nowrap; }
+  .head .sub { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .value { font-size: 30px; font-weight: 600; line-height: 1.05; }
+  .value small { font-size: 14px; font-weight: 400; color: var(--ink2); margin-left: 6px; }
+  .foot { font-size: 12px; color: var(--ink2); }
+  .note { font-size: 12px; color: var(--muted); }
+  .section { font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 4px; }
+
+  /* Medidor: el relleno lleva la severidad; la pista es un paso claro del mismo color. */
+  .meter { --fill: var(--s1); height: 8px; border-radius: 4px; overflow: hidden;
+           background: color-mix(in srgb, var(--fill) 18%, var(--surface)); }
+  .meter i { display: block; height: 100%; width: 0; background: var(--fill); border-radius: 0 4px 4px 0; transition: width .4s ease; }
+  .warn { --fill: var(--warn); }
+  .crit { --fill: var(--crit); }
+
+  .spark { display: block; width: 100%; height: 56px; cursor: crosshair; }
+
+  /* Uso por hilo */
+  .cols { display: flex; gap: 2px; height: 34px; align-items: stretch; }
+  .col { --fill: var(--s1); flex: 1 1 0; max-width: 24px; display: flex; align-items: flex-end;
+         background: color-mix(in srgb, var(--fill) 14%, var(--surface)); border-radius: 4px 4px 0 0; }
+  .col i { display: block; width: 100%; background: var(--fill); border-radius: 4px 4px 0 0; transition: height .4s ease; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink2); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend em { font-style: normal; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .sw { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+  .sw.s1 { background: var(--s1); } .sw.s2 { background: var(--s2); }
+  .big { font-size: 22px; font-weight: 600; color: var(--ink); }
+
+  .rows { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 13px; }
+  .row .t { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .row .d { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+  .row .n { margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink2); }
+  .row .n b { color: var(--ink); font-weight: 600; }
+  .tag { font-size: 11px; color: var(--ink2); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+  .item { display: flex; flex-direction: column; gap: 6px; }
+  .item.virt { opacity: .55; }
+  .disk + .disk { border-top: 1px solid var(--grid); padding-top: 10px; }
+
+  #tip { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 10; background: var(--surface); color: var(--ink);
+         border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 12px; white-space: nowrap;
+         box-shadow: 0 4px 14px rgba(0,0,0,.18); font-variant-numeric: tabular-nums; }
+  #tip .sw { margin-right: 6px; vertical-align: middle; }
+
+  @media (prefers-reduced-motion: reduce) { .meter i, .col i { transition: none; } }
+</style>
+</head>
+<body>
+<header>
+  <strong>Sistema</strong>
+  <span class="status" id="status">Conectando…</span>
+  <span class="meta" id="meta"></span>
+  <span class="spacer"></span>
+  <span class="meta" id="uptime"></span>
+  <button class="btn" id="theme" title="Cambiar tema claro/oscuro" aria-label="Cambiar tema">◐</button>
+</header>
+
+<main>
+  <section class="card">
+    <div class="head"><span class="label">CPU</span><span class="sub" id="cpu-name"></span></div>
+    <div class="value" id="cpu-val">—</div>
+    <div class="meter" id="cpu-bar"><i></i></div>
+    <canvas class="spark" id="cpu-spark"></canvas>
+    <div class="cols" id="cpu-cores"></div>
+    <div class="foot" id="cpu-foot"></div>
+  </section>
+
+  <section class="card">
+    <div class="head"><span class="label">Memoria RAM</span><span class="sub" id="ram-total"></span></div>
+    <div class="value" id="ram-val">—</div>
+    <div class="meter" id="ram-bar"><i></i></div>
+    <canvas class="spark" id="ram-spark"></canvas>
+    <div class="foot" id="ram-foot"></div>
+  </section>
+
+  <section class="card">
+    <div class="head"><span class="label">GPU</span><span class="sub" id="gpu-name"></span></div>
+    <div class="value" id="gpu-val">—</div>
+    <div class="meter" id="gpu-bar"><i></i></div>
+    <canvas class="spark" id="gpu-spark"></canvas>
+    <div class="foot" id="gpu-foot"></div>
+  </section>
+
+  <section class="card">
+    <div class="head"><span class="label">VRAM</span><span class="sub" id="vram-total"></span></div>
+    <div class="value" id="vram-val">—</div>
+    <div class="meter" id="vram-bar"><i></i></div>
+    <canvas class="spark" id="vram-spark"></canvas>
+    <div class="foot" id="vram-foot"></div>
+  </section>
+
+  <section class="card wide">
+    <div class="head"><span class="label">Disco</span></div>
+    <div class="rows" id="disks"></div>
+    <div class="section">Espacio</div>
+    <div class="rows" id="vols"></div>
+  </section>
+
+  <section class="card wide">
+    <div class="head"><span class="label">Red</span><span class="sub" id="net-sub"></span></div>
+    <div class="legend">
+      <span><b class="sw s1"></b>Descarga <em class="big" id="net-rx">—</em></span>
+      <span><b class="sw s2"></b>Subida <em class="big" id="net-tx">—</em></span>
+    </div>
+    <canvas class="spark" id="net-spark"></canvas>
+    <div class="section">Adaptadores</div>
+    <div class="rows" id="nics"></div>
+  </section>
+
+  <section class="card wide">
+    <div class="head"><span class="label">Temperatura</span><span class="sub" id="temp-sub"></span></div>
+    <div class="value" id="temp-val">—</div>
+    <canvas class="spark" id="temp-spark"></canvas>
+    <div class="rows" id="temps"></div>
+    <div class="note" id="temp-note"></div>
+  </section>
+</main>
+<div id="tip" hidden></div>
+
+<script>
+"use strict";
+const HIST = 60, POLL_MS = 1000;
+const $ = id => document.getElementById(id);
+const nf0 = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
+const nf1 = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 });
+const nf2 = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const ok = v => v !== null && v !== undefined && !Number.isNaN(v);
+
+// ---------- formato
+const pct = v => ok(v) ? nf0.format(v) + " %" : "—";
+const deg = v => ok(v) ? nf0.format(v) + " °C" : "—";
+function bytes(v) {
+  if (!ok(v)) return "—";
+  const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return (v < 10 && i > 0 ? nf1 : nf0).format(v) + " " + u[i];
+}
+const rate = v => ok(v) ? bytes(v) + "/s" : "—";
+function bits(v) { // bytes/s → bits/s, como el Administrador de tareas
+  if (!ok(v)) return "—";
+  v *= 8; const u = ["bps", "Kbps", "Mbps", "Gbps"]; let i = 0;
+  while (v >= 1000 && i < u.length - 1) { v /= 1000; i++; }
+  return (v < 10 && i > 0 ? nf1 : nf0).format(v) + " " + u[i];
+}
+function linkSpeed(v) { return !ok(v) || v <= 0 ? "" : v >= 1e9 ? nf1.format(v / 1e9) + " Gbps" : nf0.format(v / 1e6) + " Mbps"; }
+function usedOf(used, total) { // "12,5 / 31,9 GB"
+  if (!ok(used)) return "—";
+  if (!ok(total)) return bytes(used);
+  const t = bytes(total).split(" "), unit = t[1], k = 1024 ** ["B","KB","MB","GB","TB"].indexOf(unit);
+  return nf1.format(used / k) + " / " + t[0] + " " + unit;
+}
+function dur(s) {
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return d ? `${d} d ${h} h` : h ? `${h} h ${m} min` : `${m} min`;
+}
+const shortCpu = n => (n || "").replace(/\((R|TM)\)/gi, "").replace(/@.*$/, "").replace(/\b\d+(st|nd|rd|th) Gen\b/i, "")
+  .replace(/\b\d+-Core Processor\b/i, "").replace(/\bCPU\b/, "").replace(/\s+/g, " ").trim();
+const shortGpu = n => (n || "").replace(/^NVIDIA\s+/i, "").replace(/\((R|TM)\)/gi, "").trim();
+const sev = (v, warn = 70, crit = 90) => !ok(v) ? "" : v >= crit ? "crit" : v >= warn ? "warn" : "";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---------- DOM
+function setText(el, s) { if (typeof el === "string") el = $(el); if (el.textContent !== s) el.textContent = s; }
+function meter(el, v, cls) {
+  if (typeof el === "string") el = $(el);
+  el.firstElementChild.style.width = (ok(v) ? Math.max(0, Math.min(100, v)) : 0) + "%";
+  el.className = "meter " + (cls ?? sev(v));
+}
+function html(s) { const t = document.createElement("template"); t.innerHTML = s.trim(); return t.content.firstElementChild; }
+// Mantiene una lista de nodos por clave: crea los nuevos, reutiliza los existentes y quita los que ya no están.
+function sync(box, items, key, create, update) {
+  const map = box._map || (box._map = new Map()), seen = new Set();
+  items.forEach((it, i) => {
+    const k = key(it); seen.add(k);
+    let n = map.get(k);
+    if (!n) { n = create(it); map.set(k, n); }
+    if (box.children[i] !== n) box.insertBefore(n, box.children[i] || null);
+    update(n, it);
+  });
+  for (const [k, n] of map) if (!seen.has(k)) { n.remove(); map.delete(k); if (n._spark) n._spark.dispose(); }
+}
+
+// ---------- tooltip
+const tipEl = $("tip");
+const tip = {
+  show(x, y, h) {
+    tipEl.innerHTML = h; tipEl.hidden = false;
+    const r = tipEl.getBoundingClientRect();
+    let L = x + 14, T = y - r.height - 10;
+    if (L + r.width > innerWidth - 8) L = x - r.width - 14;
+    if (T < 8) T = y + 16;
+    tipEl.style.transform = `translate(${Math.round(L)}px,${Math.round(T)}px)`;
+  },
+  hide() { tipEl.hidden = true; }
+};
+
+// ---------- sparklines (canvas, 60 s)
+const C = {};
+const charts = new Set();
+function readColors() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of ["s1", "s2", "surface", "grid", "axis", "muted"]) C[k] = cs.getPropertyValue("--" + k).trim();
+  charts.forEach(c => c.draw());
+}
+function niceMax(v) {
+  const p = 10 ** Math.floor(Math.log10(v)), f = v / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+}
+// Escala redonda en la unidad que se muestra: bits decimales para red, bytes 1024 para disco.
+const niceBits = v => niceMax(v * 8) / 8;
+function niceBytes(v) {
+  let k = 1; while (v / k >= 1024) k *= 1024;
+  let f = niceMax(v / k); if (f >= 1024) { f = 1; k *= 1024; }
+  return f * k;
+}
+class Spark {
+  // series: [{ color: "s1"|"s2", name }], max: número fijo o null (autoescala), axis(max) y fmt(v) para textos.
+  constructor(canvas, o) {
+    this.cv = canvas; this.ctx = canvas.getContext("2d"); this.o = o;
+    this.data = o.series.map(() => []); this.hx = null;
+    charts.add(this);
+    this.ro = new ResizeObserver(() => this.resize()); this.ro.observe(canvas);
+    canvas.addEventListener("mousemove", e => { this.hx = e.clientX - canvas.getBoundingClientRect().left; this.draw(); });
+    canvas.addEventListener("mouseleave", () => { this.hx = null; tip.hide(); this.draw(); });
+  }
+  dispose() { this.ro.disconnect(); charts.delete(this); }
+  reset() { this.data = this.o.series.map(() => []); this.draw(); }
+  resize() {
+    const r = this.cv.getBoundingClientRect(), d = devicePixelRatio || 1;
+    this.w = r.width; this.h = r.height;
+    this.cv.width = Math.round(r.width * d); this.cv.height = Math.round(r.height * d);
+    this.ctx.setTransform(d, 0, 0, d, 0, 0);
+    this.draw();
+  }
+  push(vals) {
+    vals.forEach((v, i) => { const a = this.data[i]; a.push(ok(v) ? v : null); if (a.length > HIST) a.shift(); });
+    this.draw();
+  }
+  draw() {
+    const { ctx, w, h, o } = this;
+    if (!w || !h) return;
+    ctx.clearRect(0, 0, w, h);
+    const top = 15, base = h - 1, right = w - 6, step = right / (HIST - 1);
+    let max = o.max;
+    if (max == null) {
+      let m = 0; for (const a of this.data) for (const v of a) if (v > m) m = v;
+      max = (o.nice || niceMax)(Math.max(m, o.floor || 1));
+    }
+    const X = (i, len) => right - (len - 1 - i) * step;
+    const Y = v => base - Math.min(v, max) / max * (base - top);
+
+    ctx.font = '10px system-ui, "Segoe UI", sans-serif';
+    ctx.fillStyle = C.muted; ctx.textAlign = "left"; ctx.fillText(o.axis(max), 0, 10);
+    ctx.textAlign = "right"; ctx.fillText("60 s", right, 10);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = C.grid; ctx.beginPath(); ctx.moveTo(0, top + .5); ctx.lineTo(right, top + .5); ctx.stroke();
+    ctx.strokeStyle = C.axis; ctx.beginPath(); ctx.moveTo(0, base + .5); ctx.lineTo(right, base + .5); ctx.stroke();
+
+    const len = Math.max(...this.data.map(a => a.length));
+    this.data.forEach((a, si) => {
+      const col = C[o.series[si].color], n = a.length;
+      // tramos contiguos sin huecos
+      const runs = []; let run = [];
+      a.forEach((v, i) => { if (v === null) { if (run.length) runs.push(run); run = []; } else run.push([X(i, n), Y(v)]); });
+      if (run.length) runs.push(run);
+      for (const r of runs) {
+        if (r.length < 2) continue;
+        ctx.beginPath(); ctx.moveTo(r[0][0], base);
+        r.forEach(p => ctx.lineTo(p[0], p[1]));
+        ctx.lineTo(r[r.length - 1][0], base); ctx.closePath();
+        ctx.globalAlpha = .10; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = 1;
+        ctx.beginPath(); r.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+        ctx.lineWidth = 2; ctx.lineJoin = ctx.lineCap = "round"; ctx.strokeStyle = col; ctx.stroke();
+      }
+      const last = a[n - 1];
+      if (this.hx === null && last !== null && last !== undefined) this.dot(X(n - 1, n), Y(last), col);
+    });
+
+    if (this.hx === null || !len) return;
+    const i = Math.max(0, Math.min(len - 1, Math.round((this.hx - X(0, len)) / step)));
+    const x = X(i, len);
+    ctx.strokeStyle = C.axis; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(Math.round(x) + .5, top); ctx.lineTo(Math.round(x) + .5, base); ctx.stroke();
+    const lines = [];
+    let yTip = top;
+    this.data.forEach((a, si) => {
+      const v = a[i - (len - a.length)], s = o.series[si];
+      if (v === null || v === undefined) return;
+      this.dot(x, Y(v), C[s.color]);
+      if (si === 0) yTip = Y(v);
+      lines.push((this.data.length > 1 ? `<b class="sw ${s.color}"></b>${esc(s.name)} ` : "") + `<b>${esc(o.fmt(v))}</b>`);
+    });
+    const ago = len - 1 - i, r = this.cv.getBoundingClientRect();
+    tip.show(r.left + x, r.top + yTip, `<div>${ago ? "hace " + ago + " s" : "ahora"}</div>` + lines.map(l => `<div>${l}</div>`).join(""));
+  }
+  dot(x, y, col) { // marcador de 8px con anillo de 2px del color de la superficie
+    const { ctx } = this;
+    ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fillStyle = C.surface; ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fillStyle = col; ctx.fill();
+  }
+}
+const pctSpark = (id, name) => new Spark($(id), { series: [{ color: "s1", name }], max: 100, axis: () => "100 %", fmt: pct });
+const sparks = {
+  cpu: pctSpark("cpu-spark", "CPU"),
+  ram: pctSpark("ram-spark", "RAM"),
+  gpu: pctSpark("gpu-spark", "GPU"),
+  vram: pctSpark("vram-spark", "VRAM"),
+  net: new Spark($("net-spark"), {
+    series: [{ color: "s1", name: "Descarga" }, { color: "s2", name: "Subida" }],
+    max: null, floor: 125000, nice: niceBits, axis: bits, fmt: bits // mínimo 1 Mbps
+  }),
+  temp: new Spark($("temp-spark"), { series: [{ color: "s1", name: "Temperatura" }], max: 100, axis: () => "100 °C", fmt: deg }),
+};
+
+// ---------- uso por hilo
+const coresEl = $("cpu-cores");
+let lastPer = [];
+function renderCores(per) {
+  lastPer = per;
+  if (coresEl.children.length !== per.length)
+    coresEl.innerHTML = per.map((_, i) => `<div class="col" data-i="${i}"><i></i></div>`).join("");
+  per.forEach((v, i) => {
+    const c = coresEl.children[i];
+    c.className = "col " + sev(v);
+    c.firstElementChild.style.height = Math.max(0, Math.min(100, v)) + "%";
+  });
+}
+coresEl.addEventListener("mousemove", e => {
+  const c = e.target.closest(".col");
+  if (!c) return tip.hide();
+  const i = +c.dataset.i;
+  tip.show(e.clientX, e.clientY, `Hilo ${i}: <b>${pct(lastPer[i])}</b>`);
+});
+coresEl.addEventListener("mouseleave", () => tip.hide());
+
+// ---------- render
+let lastT = 0;
+function update(d) {
+  if (d.t === lastT) return;
+  lastT = d.t;
+  setText("meta", `${d.host} · ${d.os}`);
+  setText("uptime", "Encendido " + dur(d.uptime));
+
+  // CPU
+  const c = d.cpu;
+  setText("cpu-name", shortCpu(c.name)); $("cpu-name").title = c.name;
+  setText("cpu-val", pct(c.usage)); meter("cpu-bar", c.usage); sparks.cpu.push([c.usage]);
+  renderCores(c.per || []);
+  setText("cpu-foot", [ok(c.mhz) ? nf2.format(c.mhz / 1000) + " GHz" : null, ok(c.temp) ? deg(c.temp) : null,
+    (c.cores ? c.cores + " núcleos · " : "") + c.threads + " hilos",
+    ok(c.procs) ? nf0.format(c.procs) + " procesos" : null].filter(Boolean).join(" · "));
+
+  // RAM
+  const r = d.ram, rp = r.used / r.total * 100;
+  setText("ram-total", bytes(r.total));
+  $("ram-val").innerHTML = `${pct(rp)}<small>${usedOf(r.used, r.total)}</small>`;
+  meter("ram-bar", rp); sparks.ram.push([rp]);
+  setText("ram-foot", `Disponible ${bytes(r.avail)} · Confirmada ${usedOf(r.commit, r.commitLimit)}`);
+
+  // GPU + VRAM (la primera GPU)
+  const g = d.gpus[0];
+  if (g) {
+    setText("gpu-name", shortGpu(g.name)); $("gpu-name").title = g.name;
+    setText("gpu-val", pct(g.usage)); meter("gpu-bar", g.usage); sparks.gpu.push([g.usage]);
+    setText("gpu-foot", [ok(g.clock) ? nf0.format(g.clock) + " MHz" : null,
+      ok(g.power) ? nf0.format(g.power) + (ok(g.powerLimit) ? " / " + nf0.format(g.powerLimit) : "") + " W" : null,
+      ok(g.fan) ? "Ventilador " + pct(g.fan) : null,
+      ok(g.temp) ? deg(g.temp) : null].filter(Boolean).join(" · ") || "Datos de los contadores de Windows");
+    const vp = ok(g.memTotal) ? g.memUsed / g.memTotal * 100 : null;
+    setText("vram-total", ok(g.memTotal) ? bytes(g.memTotal) : "");
+    $("vram-val").innerHTML = ok(vp) ? `${pct(vp)}<small>${usedOf(g.memUsed, g.memTotal)}</small>` : esc(bytes(g.memUsed));
+    meter("vram-bar", vp); sparks.vram.push([vp]);
+    setText("vram-foot", [ok(g.memTotal) ? "Libre " + bytes(g.memTotal - g.memUsed) : null,
+      ok(g.memClock) ? "Memoria " + nf0.format(g.memClock) + " MHz" : null].filter(Boolean).join(" · "));
+  } else {
+    setText("gpu-name", "No detectada"); setText("vram-total", "");
+  }
+
+  // Disco: actividad por disco físico
+  sync($("disks"), d.disks, k => k.id, k => {
+    const n = html(`<div class="item disk">
+      <div class="row"><span class="t"></span><span class="tag"></span><span class="n"><b></b> activo</span></div>
+      <div class="meter"><i></i></div>
+      <div class="legend"><span><b class="sw s1"></b>Lectura <em></em></span><span><b class="sw s2"></b>Escritura <em></em></span></div>
+      <canvas class="spark"></canvas></div>`);
+    n._spark = new Spark(n.querySelector("canvas"), {
+      series: [{ color: "s1", name: "Lectura" }, { color: "s2", name: "Escritura" }],
+      max: null, floor: 1024 * 1024, nice: niceBytes, axis: rate, fmt: rate
+    });
+    return n;
+  }, (n, k) => {
+    setText(n.querySelector(".t"), k.model); n.querySelector(".t").title = `Disco ${k.id} · ${k.model}`;
+    const tag = n.querySelector(".tag"); setText(tag, k.letters || "Disco " + k.id);
+    setText(n.querySelector(".n b"), pct(k.active));
+    meter(n.querySelector(".meter"), k.active);
+    const em = n.querySelectorAll(".legend em"); setText(em[0], rate(k.read)); setText(em[1], rate(k.write));
+    n._spark.push([k.read, k.write]);
+  });
+  // Espacio por volumen
+  sync($("vols"), d.vols, v => v.name, () => html(`<div class="item">
+      <div class="row"><span class="t"></span><span class="d"></span><span class="n"></span></div>
+      <div class="meter"><i></i></div></div>`), (n, v) => {
+    const used = v.total - v.free, p = used / v.total * 100;
+    setText(n.querySelector(".t"), v.name); setText(n.querySelector(".d"), v.label || "");
+    n.querySelector(".n").innerHTML = `<b>${usedOf(used, v.total)}</b> · ${esc(bytes(v.free))} libres`;
+    meter(n.querySelector(".meter"), p, sev(p, 80, 90));
+  });
+
+  // Red
+  setText("net-rx", bits(d.net.rx)); setText("net-tx", bits(d.net.tx));
+  sparks.net.push([d.net.rx, d.net.tx]);
+  const phys = d.net.adapters.filter(a => !a.virtual).length;
+  setText("net-sub", phys ? "Total de adaptadores físicos" : "Total");
+  sync($("nics"), d.net.adapters, a => a.name, () => html(`<div class="item">
+      <div class="row"><span class="t"></span><span class="d"></span><span class="n"></span></div></div>`), (n, a) => {
+    n.classList.toggle("virt", a.virtual);
+    setText(n.querySelector(".t"), a.name);
+    const desc = n.querySelector(".d"); setText(desc, (a.virtual ? "virtual · " : "") + a.desc + (linkSpeed(a.speed) ? " · " + linkSpeed(a.speed) : ""));
+    desc.title = a.desc;
+    n.querySelector(".n").innerHTML = `↓ <b>${esc(bits(a.rx))}</b> &nbsp;↑ <b>${esc(bits(a.tx))}</b>`;
+  });
+
+  // Temperaturas: el servidor las ordena CPU > GPU > disco > ACPI; la primera es la destacada.
+  const hot = d.temps[0];
+  if (hot) {
+    const label = tempName(hot);
+    if (label !== hotLabel) { hotLabel = label; sparks.temp.reset(); } // cambió el sensor (p. ej. se abrió LHM)
+    setText("temp-val", deg(hot.c)); setText("temp-sub", (hot.kind === "cpu" ? "CPU · " : "") + label);
+    sparks.temp.push([hot.c]);
+  } else {
+    setText("temp-val", "—"); setText("temp-sub", "Sin sensores accesibles");
+  }
+  sync($("temps"), d.temps, t => t.kind + t.name, () => html(`<div class="item">
+      <div class="row"><span class="t"></span><span class="tag"></span><span class="n"><b></b></span></div>
+      <div class="meter"><i></i></div></div>`), (n, t) => {
+    const k = TEMP_KIND[t.kind] || TEMP_KIND.acpi;
+    setText(n.querySelector(".t"), tempName(t));
+    setText(n.querySelector(".tag"), k.tag);
+    setText(n.querySelector(".n b"), deg(t.c));
+    meter(n.querySelector(".meter"), t.c, sev(t.c, k.warn, k.crit));
+  });
+  setText("temp-note", d.lhm
+    ? "CPU y disco: LibreHardwareMonitor. Las zonas ACPI son sensores de placa/firmware."
+    : "Para ver la CPU y los discos, abre LibreHardwareMonitor como administrador y activa Options › Remote Web Server (puerto 8085).");
+}
+// Umbrales de aviso/crítico por tipo de sensor, en °C.
+const TEMP_KIND = {
+  cpu: { tag: "CPU", warn: 80, crit: 90 },
+  gpu: { tag: "GPU", warn: 75, crit: 85 },
+  disk: { tag: "Disco", warn: 55, crit: 70 },
+  acpi: { tag: "ACPI", warn: 70, crit: 85 },
+};
+const tempName = t => t.kind === "gpu" ? shortGpu(t.name) : t.name;
+let hotLabel = null;
+
+// ---------- sondeo (se pausa con la pestaña oculta)
+let timer = 0, busy = false;
+function setOnline(on) {
+  document.body.classList.toggle("off", !on);
+  const s = $("status"); s.classList.toggle("off", !on); setText(s, on ? "En vivo" : "Sin conexión");
+}
+async function poll() {
+  clearTimeout(timer);
+  if (document.hidden || busy) return;
+  busy = true;
+  try {
+    const res = await fetch("/api/stats", { cache: "no-store" });
+    const d = await res.json();
+    if (d.t) update(d);
+    setOnline(true);
+  } catch { setOnline(false); }
+  busy = false;
+  timer = setTimeout(poll, POLL_MS);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+
+// ---------- tema
+const root = document.documentElement;
+try { const t = localStorage.getItem("sysmon-theme"); if (t) root.dataset.theme = t; } catch {}
+$("theme").addEventListener("click", () => {
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("sysmon-theme", root.dataset.theme); } catch {}
+  readColors();
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", readColors);
+
+readColors();
+poll();
+</script>
+</body>
+</html>
