@@ -145,8 +145,9 @@ namespace SysMon
         int tick;
 
         // PDH
-        IntPtr query, cCpu, cCores, cPerf, cFreq, cProcs, cIdle, cRead, cWrite, cTherm, cGpuEng, cGpuMem;
+        IntPtr query, cCpu, cCores, cPerf, cFreq, cProcs, cIdle, cRead, cWrite, cQueue, cTherm, cGpuEng, cGpuMem;
         bool thermTenths;
+        readonly Dictionary<int, int> diskStall = new Dictionary<int, int>(); // muestras seguidas sin responder
 
         // NVML
         readonly List<IntPtr> nvDevices = new List<IntPtr>();
@@ -204,6 +205,7 @@ namespace SysMon
             cIdle = Pdh.Add(query, @"\PhysicalDisk(*)\% Idle Time");
             cRead = Pdh.Add(query, @"\PhysicalDisk(*)\Disk Read Bytes/sec");
             cWrite = Pdh.Add(query, @"\PhysicalDisk(*)\Disk Write Bytes/sec");
+            cQueue = Pdh.Add(query, @"\PhysicalDisk(*)\Current Disk Queue Length");
             cTherm = Pdh.Add(query, @"\Thermal Zone Information(*)\High Precision Temperature");
             thermTenths = cTherm != IntPtr.Zero;
             if (!thermTenths) cTherm = Pdh.Add(query, @"\Thermal Zone Information(*)\Temperature");
@@ -331,6 +333,7 @@ namespace SysMon
             var idle = Pdh.GetAll(cIdle);
             var rd = Pdh.GetAll(cRead);
             var wr = Pdh.GetAll(cWrite);
+            var qd = Pdh.GetAll(cQueue);
             var disks = new List<KeyValuePair<int, string>>();
             foreach (var kv in idle)
             {
@@ -340,13 +343,21 @@ namespace SysMon
                 if (!int.TryParse(parts[0], out id)) continue;
                 string model;
                 diskModels.TryGetValue(id, out model);
-                double r, w;
+                double r, w, q;
                 rd.TryGetValue(kv.Key, out r);
                 wr.TryGetValue(kv.Key, out w);
+                if (!qd.TryGetValue(kv.Key, out q)) q = double.NaN;
+                double active = Clamp(100 - kv.Value);
+                // Windows cuenta los bytes al terminar cada petición. Si hay peticiones en cola y en todo el
+                // segundo no termina ninguna, el disco no responde: sale ~100 % activo con 0 B/s.
+                int stall;
+                diskStall.TryGetValue(id, out stall);
+                diskStall[id] = stall = (q >= 1 && r < 1 && w < 1 && active >= 95) ? stall + 1 : 0;
                 disks.Add(new KeyValuePair<int, string>(id,
                     "{\"id\":" + id + ",\"model\":" + S(model ?? ("Disco " + id)) +
                     ",\"letters\":" + S(string.Join(" ", parts.Skip(1))) +
-                    ",\"active\":" + N(Clamp(100 - kv.Value)) + ",\"read\":" + N(r) + ",\"write\":" + N(w) + "}"));
+                    ",\"active\":" + N(active) + ",\"read\":" + N(r) + ",\"write\":" + N(w) +
+                    ",\"queue\":" + N(q) + ",\"stall\":" + N(stall * IntervalMs / 1000.0) + "}"));
             }
             disks.Sort((a, b) => a.Key.CompareTo(b.Key));
             if (tick % 5 == 0) volsJson = Volumes();

@@ -5,7 +5,7 @@ Monitor de sistema minimalista para Windows. Muestra en una web local, actualiza
 - **CPU**: uso total, frecuencia real, uso por hilo, procesos y temperatura (con LibreHardwareMonitor).
 - **Memoria RAM**: en uso, disponible y memoria confirmada.
 - **GPU** y **VRAM**: uso, memoria, reloj, consumo, ventilador y temperatura.
-- **Disco**: actividad, lectura y escritura por disco, y espacio libre por unidad.
+- **Disco**: actividad, lectura y escritura por disco, y espacio libre por unidad. Avisa si un disco deja de responder.
 - **Red**: descarga y subida, total y por adaptador.
 - **Temperatura**: CPU, GPU, SSD y zonas ACPI.
 
@@ -78,3 +78,4 @@ El servidor solo escucha en `localhost`, así que no es accesible desde otros eq
 - **"No se pudo compilar sysmon.cs"**: lo más habitual es que *Sistema* siga abierto y el `.exe` esté en uso. Cierra la ventana *SysMon* y vuelve a ejecutar el `.bat`.
 - **"El puerto 8787 ya está en uso"**: otra aplicación usa ese puerto. Cambia `PORT` en `SysMon.bat`.
 - **No aparece la temperatura de la CPU**: comprueba que LibreHardwareMonitor está abierto como administrador y que <http://localhost:8085/data.json> responde en el navegador.
+- **Un disco pone "Sin respuesta"** (o 100 % activo con 0 B/s): el disco tiene peticiones pendientes y no termina ninguna. No es un error de medida, porque Windows cuenta los bytes cuando cada petición termina. Si pasa a menudo con un disco USB, mira en el Visor de eventos (*Registros de Windows → Sistema*) si hay avisos 129 (reinicio del dispositivo) o 153 (operación repetida). Suelen deberse al cable, al puerto, a la alimentación, a la caja USB o al propio disco.

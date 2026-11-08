@@ -438,7 +438,7 @@ function update(d) {
   // Disco: actividad por disco físico
   sync($("disks"), d.disks, k => k.id, k => {
     const n = html(`<div class="item disk">
-      <div class="row"><span class="t"></span><span class="tag"></span><span class="n"><b></b> activo</span></div>
+      <div class="row"><span class="t"></span><span class="tag"></span><span class="n"></span></div>
       <div class="meter"><i></i></div>
       <div class="legend"><span><b class="sw s1"></b>Lectura <em></em></span><span><b class="sw s2"></b>Escritura <em></em></span></div>
       <canvas class="spark"></canvas></div>`);
@@ -450,7 +450,13 @@ function update(d) {
   }, (n, k) => {
     setText(n.querySelector(".t"), k.model); n.querySelector(".t").title = `Disco ${k.id} · ${k.model}`;
     const tag = n.querySelector(".tag"); setText(tag, k.letters || "Disco " + k.id);
-    setText(n.querySelector(".n b"), pct(k.active));
+    // Con peticiones en cola y ninguna terminada, Windows marca ~100 % activo y 0 B/s: se dice tal cual.
+    const st = n.querySelector(".n"), stuck = k.stall >= 2, q = ok(k.queue) ? nf0.format(k.queue) : null;
+    const h = stuck ? `<b>Sin respuesta</b> · ${nf0.format(k.stall)} s` + (q ? ` · ${q} en cola` : "")
+                    : `<b>${pct(k.active)}</b> activo`;
+    if (st._h !== h) { st.innerHTML = h; st._h = h; }
+    st.title = stuck ? `El disco tiene ${q} peticiones pendientes y lleva ${nf0.format(k.stall)} s sin terminar ninguna. ` +
+      "Windows cuenta los bytes al terminar cada petición, por eso la lectura y la escritura marcan 0." : "";
     meter(n.querySelector(".meter"), k.active);
     const em = n.querySelectorAll(".legend em"); setText(em[0], rate(k.read)); setText(em[1], rate(k.write));
     n._spark.push([k.read, k.write]);
